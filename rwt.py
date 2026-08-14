@@ -1,189 +1,554 @@
 import streamlit as st
+import re
 
-# -------------------------------------------------
-# Sentiment Analysis - Keyword Based
-# -------------------------------------------------
+# ==================================================
+# SENTIMENT & MOOD DATA
+# ==================================================
 
-MOOD_KEYWORDS = {
-    "crisis": [
-        "suicide", "kill myself", "end it all",
-        "want to die", "self harm", "hurt myself",
-        "no reason to live"
-    ],
+MOODS = {
+    "Happy": {
+        "emoji": "😊",
+        "keywords": [
+            "happy", "great", "good", "amazing", "wonderful",
+            "joy", "joyful", "awesome", "fantastic", "glad",
+            "grateful", "thankful", "blessed", "love"
+        ],
+        "suggestion": "Keep enjoying this moment! Celebrate your small wins and share your happiness with someone. ✨",
+        "try": "🎉 Celebrate a small win • ❤️ Share your happiness • 📸 Capture the moment"
+    },
 
-    "anxious": [
-        "anxious", "anxiety", "panic", "nervous",
-        "worried", "stress", "stressed", "overwhelmed",
-        "fear", "scared", "dread", "tense", "uneasy"
-    ],
+    "Excited": {
+        "emoji": "🤩",
+        "keywords": [
+            "excited", "exciting", "thrilled", "eager",
+            "can't wait", "looking forward", "yay"
+        ],
+        "suggestion": "Your excitement is great energy! Use it to take one positive step toward your goal. 🚀",
+        "try": "🎯 Set a goal • 🚀 Take action • 📝 Plan your next step"
+    },
 
-    "sad": [
-        "sad", "depressed", "depression", "hopeless",
-        "crying", "cry", "lonely", "alone", "empty",
-        "numb", "lost", "grief", "heartbroken",
-        "miserable", "worthless"
-    ],
+    "Sad": {
+        "emoji": "😔",
+        "keywords": [
+            "sad", "cry", "crying", "lonely", "alone",
+            "heartbroken", "grief", "miserable", "empty",
+            "lost", "upset"
+        ],
+        "suggestion": "It's okay to have difficult days. Give yourself some time and talk to someone you trust. 💙",
+        "try": "🎵 Listen to music • 🚶 Take a short walk • 💬 Talk to someone"
+    },
 
-    "angry": [
-        "angry", "anger", "furious", "rage",
-        "hate", "frustrated", "frustration",
-        "annoyed", "irritated", "mad"
-    ],
+    "Depressed": {
+        "emoji": "💙",
+        "keywords": [
+            "depressed", "depression", "hopeless",
+            "worthless", "numb", "no hope"
+        ],
+        "suggestion": "You don't have to handle everything alone. Be gentle with yourself and consider reaching out to someone you trust or a mental-health professional. 💙",
+        "try": "💬 Talk to someone • 🌿 Take one small step • 🧘 Give yourself time"
+    },
 
-    "tired": [
-        "tired", "exhausted", "drained",
-        "fatigued", "sleepy", "no energy",
-        "burnt out", "burnout", "weak"
-    ],
+    "Anxious": {
+        "emoji": "😰",
+        "keywords": [
+            "anxious", "anxiety", "panic", "nervous",
+            "worried", "stress", "stressed", "overwhelmed",
+            "scared", "fear", "uneasy"
+        ],
+        "suggestion": "Take a slow breath and focus on one thing at a time. You don't need to solve everything right now. 🌿",
+        "try": "🌬️ Deep breathing • 📝 Write your thoughts • 📵 Take a screen break"
+    },
 
-    "happy": [
-        "happy", "great", "amazing", "wonderful",
-        "excited", "joy", "joyful", "good",
-        "fantastic", "awesome", "grateful",
-        "thankful", "blessed", "content"
-    ],
+    "Angry": {
+        "emoji": "😡",
+        "keywords": [
+            "angry", "anger", "furious", "rage", "hate",
+            "frustrated", "frustration", "annoyed",
+            "irritated", "mad"
+        ],
+        "suggestion": "Pause before reacting. Take a few breaths and step away for a moment before responding. 🧘",
+        "try": "🚶 Step away • 💧 Drink water • ⏳ Wait before responding"
+    },
 
-    "calm": [
-        "calm", "peaceful", "relaxed",
-        "fine", "okay", "ok", "alright",
-        "neutral", "steady"
-    ]
+    "Tired": {
+        "emoji": "😴",
+        "keywords": [
+            "tired", "exhausted", "drained", "sleepy",
+            "fatigued", "weak", "burnout", "burnt out",
+            "no energy"
+        ],
+        "suggestion": "Your body may need a break. Rest, hydrate, and give yourself permission to slow down. 🌙",
+        "try": "😴 Rest • 💧 Hydrate • 🌙 Get proper sleep"
+    },
+
+    "Calm": {
+        "emoji": "😌",
+        "keywords": [
+            "calm", "peaceful", "relaxed", "fine",
+            "okay", "ok", "alright", "steady"
+        ],
+        "suggestion": "You seem to be in a balanced state. Keep doing what helps you feel peaceful. 🌿",
+        "try": "🧘 Meditate • 🎵 Enjoy calm music • 🌿 Spend time peacefully"
+    },
+
+    "Motivated": {
+        "emoji": "💪",
+        "keywords": [
+            "motivated", "focused", "determined",
+            "confident", "productive", "strong",
+            "ready", "goal", "achieve"
+        ],
+        "suggestion": "You've got momentum! Keep going, even if progress feels small. Consistency beats perfection. 🔥",
+        "try": "🎯 Set a goal • ⏱️ Start a task • ✅ Track your progress"
+    },
+
+    "Successful": {
+        "emoji": "🏆",
+        "keywords": [
+            "success", "successful", "selected", "won",
+            "achieved", "achievement", "promoted",
+            "passed", "victory", "accomplished"
+        ],
+        "suggestion": "Congratulations! 🎉 You earned this moment. Celebrate your achievement and use it as motivation for your next goal.",
+        "try": "🏆 Celebrate • 📝 Reflect • 🚀 Set your next goal"
+    },
+
+    "Lonely": {
+        "emoji": "🥺",
+        "keywords": [
+            "lonely", "alone", "isolated",
+            "no one", "nobody"
+        ],
+        "suggestion": "Feeling lonely can be difficult. Consider connecting with a friend, family member, or someone you trust. ❤️",
+        "try": "💬 Message a friend • 👨‍👩‍👧 Spend time with family • ❤️ Connect with someone"
+    }
 }
 
 
-def analyze_sentiment(text):
-    """Return mood and sentiment score."""
+# ==================================================
+# ANALYSIS FUNCTION
+# ==================================================
 
-    text = text.lower()
+def analyze_text(text):
 
-    # Check crisis first
-    for keyword in MOOD_KEYWORDS["crisis"]:
-        if keyword in text:
-            return "crisis", -1.0
+    text_lower = text.lower()
 
-    # Check other moods
-    for mood, keywords in MOOD_KEYWORDS.items():
+    # ----------------------------------------------
+    # Mood detection
+    # ----------------------------------------------
 
-        if mood == "crisis":
-            continue
+    mood = "Neutral"
 
-        for keyword in keywords:
-            if keyword in text:
+    for mood_name, data in MOODS.items():
 
-                score_map = {
-                    "happy": 0.8,
-                    "calm": 0.3,
-                    "neutral": 0.0,
-                    "tired": -0.2,
-                    "anxious": -0.5,
-                    "sad": -0.6,
-                    "angry": -0.7
-                }
+        for word in data["keywords"]:
 
-                return mood, score_map.get(mood, 0.0)
+            if word in text_lower:
+                mood = mood_name
+                break
 
-    return "neutral", 0.0
+        if mood != "Neutral":
+            break
+
+    # ----------------------------------------------
+    # Positive / Negative words
+    # ----------------------------------------------
+
+    positive_words = [
+        "happy", "good", "great", "amazing", "awesome",
+        "love", "wonderful", "excellent", "success",
+        "successful", "excited", "best", "grateful",
+        "thankful", "achieved", "won"
+    ]
+
+    negative_words = [
+        "sad", "bad", "hate", "angry", "upset",
+        "depressed", "anxious", "stress", "worried",
+        "lonely", "tired", "terrible", "hopeless",
+        "worthless", "frustrated"
+    ]
+
+    positive_count = sum(
+        text_lower.count(word)
+        for word in positive_words
+    )
+
+    negative_count = sum(
+        text_lower.count(word)
+        for word in negative_words
+    )
+
+    # ----------------------------------------------
+    # Sentiment
+    # ----------------------------------------------
+
+    if positive_count > negative_count:
+        sentiment = "Positive"
+
+    elif negative_count > positive_count:
+        sentiment = "Negative"
+
+    else:
+        sentiment = "Neutral"
+
+    # ----------------------------------------------
+    # Score
+    # ----------------------------------------------
+
+    total = positive_count + negative_count
+
+    if total == 0:
+        score = 0.0
+
+    else:
+        score = (positive_count - negative_count) / total
+
+    # ----------------------------------------------
+    # Intensity
+    # ----------------------------------------------
+
+    score_abs = abs(score)
+
+    if score_abs >= 0.70:
+        intensity = "High"
+
+    elif score_abs >= 0.30:
+        intensity = "Medium"
+
+    else:
+        intensity = "Low"
+
+    # ----------------------------------------------
+    # Tone
+    # ----------------------------------------------
+
+    if mood in ["Happy", "Excited", "Motivated", "Successful"]:
+        tone = "Positive & Energetic"
+
+    elif mood in ["Sad", "Depressed", "Lonely"]:
+        tone = "Emotional"
+
+    elif mood in ["Angry"]:
+        tone = "Aggressive"
+
+    elif mood in ["Anxious"]:
+        tone = "Worried"
+
+    elif mood in ["Tired"]:
+        tone = "Low Energy"
+
+    elif mood in ["Calm"]:
+        tone = "Peaceful"
+
+    else:
+        tone = "Neutral"
+
+    # ----------------------------------------------
+    # Statistics
+    # ----------------------------------------------
+
+    words = text.split()
+
+    word_count = len(words)
+
+    character_count = len(text)
+
+    sentences = len(
+        re.findall(r"[.!?]+", text)
+    )
+
+    if sentences == 0:
+        sentences = 1
+
+    return (
+        mood,
+        sentiment,
+        score,
+        intensity,
+        tone,
+        word_count,
+        character_count,
+        sentences,
+        positive_count,
+        negative_count
+    )
 
 
-# -------------------------------------------------
-# Streamlit App
-# -------------------------------------------------
+# ==================================================
+# PAGE CONFIGURATION
+# ==================================================
 
 st.set_page_config(
-    page_title="Sentiment Analysis",
-    page_icon="💭",
-    layout="centered"
+    page_title="AI Sentiment Analyzer",
+    page_icon="🧠",
+    layout="wide"
 )
 
-st.title("💭 Sentiment Analysis")
-st.write("Enter a sentence and find out its mood.")
+
+# ==================================================
+# HEADER
+# ==================================================
+
+st.title("🧠 AI Sentiment & Mood Analyzer")
+
+st.write(
+    "Analyze emotions, sentiment, tone and intensity "
+    "from any text using Python."
+)
 
 st.divider()
 
-# Text input
+
+# ==================================================
+# EXAMPLE TEXT
+# ==================================================
+
+st.subheader("✨ Try an Example")
+
+col1, col2, col3 = st.columns(3)
+
+if "text" not in st.session_state:
+    st.session_state.text = ""
+
+
+with col1:
+    if st.button("😊 Happy Example"):
+        st.session_state.text = (
+            "I am extremely happy today! "
+            "Everything is going amazingly well."
+        )
+
+with col2:
+    if st.button("😔 Sad Example"):
+        st.session_state.text = (
+            "I feel lonely and sad today. "
+            "Nothing seems to be going right."
+        )
+
+with col3:
+    if st.button("🏆 Success Example"):
+        st.session_state.text = (
+            "I finally got selected for my dream job! "
+            "I am so excited and proud."
+        )
+
+
+# ==================================================
+# TEXT INPUT
+# ==================================================
+
+st.subheader("📝 Enter Your Text")
+
 text = st.text_area(
-    "Enter your text:",
-    placeholder="Example: I am feeling happy today!",
-    height=150
+    "Write something below:",
+    value=st.session_state.text,
+    placeholder="Example: I worked really hard and finally achieved my goal!",
+    height=160
 )
 
-# Analyze button
-if st.button("🔍 Analyze Sentiment", use_container_width=True):
+
+# ==================================================
+# ANALYZE BUTTON
+# ==================================================
+
+if st.button(
+    "🔍 Analyze Text",
+    use_container_width=True
+):
 
     if text.strip() == "":
         st.warning("Please enter some text first.")
 
     else:
-        mood, score = analyze_sentiment(text)
 
-        st.subheader("Result")
+        results = analyze_text(text)
 
-        # Display mood
-        if mood == "happy":
-            st.success("😊 Mood: Happy")
+        (
+            mood,
+            sentiment,
+            score,
+            intensity,
+            tone,
+            word_count,
+            character_count,
+            sentences,
+            positive_count,
+            negative_count
+        ) = results
 
-        elif mood == "calm":
-            st.info("😌 Mood: Calm")
+        st.divider()
 
-        elif mood == "sad":
-            st.error("😔 Mood: Sad")
+        # ==========================================
+        # MAIN RESULTS
+        # ==========================================
 
-        elif mood == "angry":
-            st.error("😡 Mood: Angry")
+        st.subheader("📊 Analysis Results")
 
-        elif mood == "anxious":
-            st.warning("😟 Mood: Anxious")
+        col1, col2, col3, col4, col5 = st.columns(5)
 
-        elif mood == "tired":
-            st.warning("😴 Mood: Tired")
+        mood_emoji = MOODS.get(
+            mood,
+            {"emoji": "😐"}
+        )["emoji"]
 
-        elif mood == "crisis":
-            st.error("⚠️ Mood: Crisis")
-
-        else:
-            st.info("😐 Mood: Neutral")
-
-        # Score
-        st.metric(
-            "Sentiment Score",
-            f"{score:.2f}"
-        )
-
-        # Progress bar
-        st.write("Sentiment intensity")
-
-        progress = (score + 1) / 2
-        st.progress(progress)
-
-        # Simple message
-        if mood == "happy":
-            st.write("✨ Your text has a positive tone.")
-
-        elif mood == "sad":
-            st.write("💙 Your text appears to have a negative/sad tone.")
-
-        elif mood == "angry":
-            st.write("🔥 Your text appears to express anger.")
-
-        elif mood == "anxious":
-            st.write("🌧️ Your text appears to express anxiety or worry.")
-
-        elif mood == "tired":
-            st.write("😴 Your text appears to express tiredness.")
-
-        elif mood == "calm":
-            st.write("🌿 Your text has a calm tone.")
-
-        elif mood == "crisis":
-            st.write(
-                "If this reflects how you are actually feeling, "
-                "please consider reaching out to someone you trust "
-                "or a qualified professional for immediate support."
+        with col1:
+            st.metric(
+                "🎭 Mood",
+                f"{mood_emoji} {mood}"
             )
 
+        with col2:
+            st.metric(
+                "💭 Sentiment",
+                sentiment
+            )
+
+        with col3:
+            st.metric(
+                "📊 Score",
+                f"{score:+.2f}"
+            )
+
+        with col4:
+            st.metric(
+                "🔥 Intensity",
+                intensity
+            )
+
+        with col5:
+            st.metric(
+                "🗣️ Tone",
+                tone
+            )
+
+        # ==========================================
+        # SENTIMENT METER
+        # ==========================================
+
+        st.subheader("📈 Sentiment Intensity")
+
+        st.progress(
+            int((score + 1) * 50)
+        )
+
+        st.caption(
+            "Negative ← Sentiment → Positive"
+        )
+
+        # ==========================================
+        # TEXT STATISTICS
+        # ==========================================
+
+        st.subheader("📝 Text Statistics")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Words",
+                word_count
+            )
+
+        with col2:
+            st.metric(
+                "Characters",
+                character_count
+            )
+
+        with col3:
+            st.metric(
+                "Sentences",
+                sentences
+            )
+
+        with col4:
+            st.metric(
+                "Positive Words",
+                positive_count
+            )
+
+        # ==========================================
+        # PERSONALIZED SUGGESTION
+        # ==========================================
+
+        st.subheader("💡 Personalized Suggestion")
+
+        if mood in MOODS:
+
+            data = MOODS[mood]
+
+            st.info(
+                f"{data['emoji']} **{data['suggestion']}**"
+            )
+
+            st.write("### 🌱 You can try:")
+
+            st.write(data["try"])
+
         else:
-            st.write("The text has a neutral tone.")
+
+            st.info(
+                "😐 Your text appears neutral. "
+                "Keep going at your own pace."
+            )
+
+        # ==========================================
+        # SENTIMENT BREAKDOWN
+        # ==========================================
+
+        st.subheader("📊 Sentiment Breakdown")
+
+        total_words = positive_count + negative_count
+
+        if total_words == 0:
+
+            positive_percent = 0
+            negative_percent = 0
+            neutral_percent = 100
+
+        else:
+
+            positive_percent = (
+                positive_count / total_words * 100
+            )
+
+            negative_percent = (
+                negative_count / total_words * 100
+            )
+
+            neutral_percent = max(
+                0,
+                100 - positive_percent - negative_percent
+            )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "🟢 Positive",
+                f"{positive_percent:.0f}%"
+            )
+
+        with col2:
+            st.metric(
+                "🔴 Negative",
+                f"{negative_percent:.0f}%"
+            )
+
+        with col3:
+            st.metric(
+                "⚪ Neutral",
+                f"{neutral_percent:.0f}%"
+            )
+
+
+# ==================================================
+# FOOTER
+# ==================================================
 
 st.divider()
 
-st.caption("Sentiment Analysis Project • Python + Streamlit")
+st.caption(
+    "Built with Python 🐍 + Streamlit • "
+    "Sentiment & Mood Analysis Project"
+)
