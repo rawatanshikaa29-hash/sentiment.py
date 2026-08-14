@@ -1,75 +1,189 @@
-"""
-Sentiment analysis engine using VADER (Valence Aware Dictionary and sEntiment Reasoner).
-Falls back to keyword-based analysis if VADER is unavailable.
-"""
+import streamlit as st
 
-try:
-    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-    _analyzer = SentimentIntensityAnalyzer()
-    VADER_AVAILABLE = True
-except ImportError:
-    VADER_AVAILABLE = False
-# Keyword banks for fallback + mood enrichment
+# -------------------------------------------------
+# Sentiment Analysis - Keyword Based
+# -------------------------------------------------
+
 MOOD_KEYWORDS = {
-    "crisis":   ["suicide", "kill myself", "end it all", "want to die", "self harm", "hurt myself", "no reason to live"],
-    "anxious":  ["anxious", "anxiety", "panic", "nervous", "worried", "stress", "stressed", "overwhelmed", "fear", "scared", "dread", "tense", "uneasy"],
-    "sad":      ["sad", "depressed", "depression", "hopeless", "crying", "cry", "lonely", "alone", "empty", "numb", "lost", "grief", "heartbroken", "miserable", "worthless"],
-    "angry":    ["angry", "anger", "furious", "rage", "hate", "frustrated", "frustration", "annoyed", "irritated", "mad"],
-    "tired":    ["tired", "exhausted", "drained", "fatigued", "sleepy", "no energy", "burnt out", "burnout", "weak"],
-    "happy":    ["happy", "great", "amazing", "wonderful", "excited", "joy", "joyful", "good", "fantastic", "awesome", "grateful", "thankful", "blessed", "content"],
-    "calm":     ["calm", "peaceful", "relaxed", "fine", "okay", "ok", "alright", "neutral", "steady"],
+    "crisis": [
+        "suicide", "kill myself", "end it all",
+        "want to die", "self harm", "hurt myself",
+        "no reason to live"
+    ],
+
+    "anxious": [
+        "anxious", "anxiety", "panic", "nervous",
+        "worried", "stress", "stressed", "overwhelmed",
+        "fear", "scared", "dread", "tense", "uneasy"
+    ],
+
+    "sad": [
+        "sad", "depressed", "depression", "hopeless",
+        "crying", "cry", "lonely", "alone", "empty",
+        "numb", "lost", "grief", "heartbroken",
+        "miserable", "worthless"
+    ],
+
+    "angry": [
+        "angry", "anger", "furious", "rage",
+        "hate", "frustrated", "frustration",
+        "annoyed", "irritated", "mad"
+    ],
+
+    "tired": [
+        "tired", "exhausted", "drained",
+        "fatigued", "sleepy", "no energy",
+        "burnt out", "burnout", "weak"
+    ],
+
+    "happy": [
+        "happy", "great", "amazing", "wonderful",
+        "excited", "joy", "joyful", "good",
+        "fantastic", "awesome", "grateful",
+        "thankful", "blessed", "content"
+    ],
+
+    "calm": [
+        "calm", "peaceful", "relaxed",
+        "fine", "okay", "ok", "alright",
+        "neutral", "steady"
+    ]
 }
 
-def _keyword_mood(text: str) -> str:
-    lower = text.lower()
+
+def analyze_sentiment(text):
+    """Return mood and sentiment score."""
+
+    text = text.lower()
+
+    # Check crisis first
+    for keyword in MOOD_KEYWORDS["crisis"]:
+        if keyword in text:
+            return "crisis", -1.0
+
+    # Check other moods
     for mood, keywords in MOOD_KEYWORDS.items():
-        if any(kw in lower for kw in keywords):
-            return mood
-    return "neutral"
 
-def analyze_sentiment(text: str) -> tuple[str, float]:
-    """
-    Returns (mood_label, compound_score).
-    mood_label: one of crisis | anxious | sad | angry | tired | happy | calm | neutral
-    compound_score: float in [-1.0, 1.0]
-    """
-    # Always check for crisis keywords first — safety priority
-    lower = text.lower()
-    if any(kw in lower for kw in MOOD_KEYWORDS["crisis"]):
-        return ("crisis", -1.0)
+        if mood == "crisis":
+            continue
 
-    if VADER_AVAILABLE:
-        scores = _analyzer.polarity_scores(text)
-        compound = scores["compound"]
+        for keyword in keywords:
+            if keyword in text:
 
-        # Enrich VADER result with keyword context
-        keyword_mood = _keyword_mood(text)
-        if keyword_mood not in ("neutral", "calm"):
-            return (keyword_mood, compound)
+                score_map = {
+                    "happy": 0.8,
+                    "calm": 0.3,
+                    "neutral": 0.0,
+                    "tired": -0.2,
+                    "anxious": -0.5,
+                    "sad": -0.6,
+                    "angry": -0.7
+                }
 
-        # Map compound score to mood label
-        if compound >= 0.5:
-            mood = "happy"
-        elif compound >= 0.1:
-            mood = "calm"
-        elif compound >= -0.1:
-            mood = "neutral"
-        elif compound >= -0.35:
-            mood = "sad"
-        elif compound >= -0.6:
-            mood = "anxious"
-        else:
-            mood = "sad"
+                return mood, score_map.get(mood, 0.0)
 
-        return (mood, compound)
+    return "neutral", 0.0
+
+
+# -------------------------------------------------
+# Streamlit App
+# -------------------------------------------------
+
+st.set_page_config(
+    page_title="Sentiment Analysis",
+    page_icon="💭",
+    layout="centered"
+)
+
+st.title("💭 Sentiment Analysis")
+st.write("Enter a sentence and find out its mood.")
+
+st.divider()
+
+# Text input
+text = st.text_area(
+    "Enter your text:",
+    placeholder="Example: I am feeling happy today!",
+    height=150
+)
+
+# Analyze button
+if st.button("🔍 Analyze Sentiment", use_container_width=True):
+
+    if text.strip() == "":
+        st.warning("Please enter some text first.")
 
     else:
-        # Pure keyword fallback
-        mood = _keyword_mood(text)
-        score_map = {
-            "happy": 0.7, "calm": 0.2, "neutral": 0.0,
-            "tired": -0.2, "anxious": -0.5, "sad": -0.6,
-            "angry": -0.55, "crisis": -1.0,
-        }
-        return (mood, score_map.get(mood, 0.0))
+        mood, score = analyze_sentiment(text)
 
+        st.subheader("Result")
+
+        # Display mood
+        if mood == "happy":
+            st.success("😊 Mood: Happy")
+
+        elif mood == "calm":
+            st.info("😌 Mood: Calm")
+
+        elif mood == "sad":
+            st.error("😔 Mood: Sad")
+
+        elif mood == "angry":
+            st.error("😡 Mood: Angry")
+
+        elif mood == "anxious":
+            st.warning("😟 Mood: Anxious")
+
+        elif mood == "tired":
+            st.warning("😴 Mood: Tired")
+
+        elif mood == "crisis":
+            st.error("⚠️ Mood: Crisis")
+
+        else:
+            st.info("😐 Mood: Neutral")
+
+        # Score
+        st.metric(
+            "Sentiment Score",
+            f"{score:.2f}"
+        )
+
+        # Progress bar
+        st.write("Sentiment intensity")
+
+        progress = (score + 1) / 2
+        st.progress(progress)
+
+        # Simple message
+        if mood == "happy":
+            st.write("✨ Your text has a positive tone.")
+
+        elif mood == "sad":
+            st.write("💙 Your text appears to have a negative/sad tone.")
+
+        elif mood == "angry":
+            st.write("🔥 Your text appears to express anger.")
+
+        elif mood == "anxious":
+            st.write("🌧️ Your text appears to express anxiety or worry.")
+
+        elif mood == "tired":
+            st.write("😴 Your text appears to express tiredness.")
+
+        elif mood == "calm":
+            st.write("🌿 Your text has a calm tone.")
+
+        elif mood == "crisis":
+            st.write(
+                "If this reflects how you are actually feeling, "
+                "please consider reaching out to someone you trust "
+                "or a qualified professional for immediate support."
+            )
+
+        else:
+            st.write("The text has a neutral tone.")
+
+st.divider()
+
+st.caption("Sentiment Analysis Project • Python + Streamlit")
